@@ -1,0 +1,46 @@
+import numpy as np
+import layers
+
+class ConvNet():
+
+	def __init__(self):
+		self.conv = layers.ConvLayer(1, 20, 9, 9)
+		self.prelu = layers.PReLU(20)
+		# self.relu = layers.ReLU()
+		self.pool = layers.MaxPool(2, 2, 2)
+		self.dropout = layers.Dropout(0.5)
+		self.fc = layers.FullyConnectedLayer(20*20*20/4, 10)
+		self.softmax = layers.SoftMax()
+		self.layers = {}
+		self.layers['conv'] = self.conv
+		self.layers['prelu'] = self.prelu
+		self.layers['fc'] = self.fc
+
+	def forward(self, input):
+		self.conv_output = self.conv.forward(input)
+		self.prelu_output = self.prelu.forward(self.conv_output)
+		self.pool_output = self.pool.forward(self.prelu_output)
+		self.dropout_output = self.dropout.forward(self.pool_output)
+		self.fc_output = self.fc.forward(self.dropout_output)
+		return self.fc_output
+
+	def backward(self, input, label):
+		self.forward(input)
+		loss, dfc = self.softmax.compute(self.fc_output, label)
+		dd, dw2, db2 = self.fc.backward(dfc, self.dropout_output)
+		dp = self.dropout.backward(dd, self.pool_output)
+		dr = self.pool.backward(dp, self.prelu_output)
+		dc, da = self.prelu.backward(dr, self.conv_output)
+		dx, dw1, db1 = self.conv.backward(dc, input)
+		grads = {'conv':{'weights':dw1, 'bias':db1}, 'fc':{'weights':dw2, 'bias':db2}, 'prelu':{'weights':da, 'bias':np.zeros(1)}}
+		return loss, grads
+
+	def update_params(self, grads_update):
+		for layer in self.layers:
+			self.layers[layer].update_weights(grads_update[layer]['weights'])
+			self.layers[layer].update_bias(grads_update[layer]['bias'])
+		return
+
+	def set_mode(self, mode):
+		self.dropout.set_mode(mode)
+		return
